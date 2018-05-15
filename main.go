@@ -1,17 +1,14 @@
 package main
 
 import (
-	"image"
-	"image/png"
+	"fmt"
+	"math"
 	"os"
 
-	"math"
-
-	"fmt"
-
-	"image/draw"
-
+	"image"
 	"image/color"
+	"image/draw"
+	"image/png"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/tiff"
