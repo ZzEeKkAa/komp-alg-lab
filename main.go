@@ -447,9 +447,9 @@ func saveMethod2(img image.Image, i0, j0, k, s int) {
 func saveMethod3(img image.Image, i0, j0, k, s int) {
 	redImg, greenImg, blueImg := convert(img)
 
-	dr := method3(redImg, 4)
-	dg := method3(greenImg, 4)
-	db := method3(blueImg, 4)
+	dr := method3(redImg, 8)
+	dg := method3(greenImg, 8)
+	db := method3(blueImg, 8)
 
 	rMin, rMax := minMaxDisc(dr)
 	gMin, gMax := minMaxDisc(dg)
@@ -515,9 +515,9 @@ func process() error {
 	i0, j0 := *i0, *j0
 	k, s := *k, *s
 
-	saveMethod1(img, i0, j0, k, s)
+	//saveMethod1(img, i0, j0, k, s)
 	//saveMethod2(img, i0, j0, k, s)
-	//saveMethod3(img, i0, j0, k, s)
+	saveMethod3(img, i0, j0, k, s)
 	//saveMethod4(img, i0, j0, k, s)
 	//saveMethod5(img, i0, j0, k, s)
 
