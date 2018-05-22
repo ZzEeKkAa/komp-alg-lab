@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math"
 	"os"
 
@@ -10,12 +9,25 @@ import (
 	"image/draw"
 	"image/png"
 
+	"flag"
+
+	"path"
+
 	"github.com/gonum/matrix/mat64"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/tiff"
 )
 
+var (
+	i0 = flag.Int("i0", 120, "")
+	j0 = flag.Int("j0", 40, "")
+	k  = flag.Int("k", 5, "")
+	s  = flag.Int("s", 5, "")
+)
+
 func main() {
+	flag.Parse()
+
 	process()
 }
 
@@ -38,8 +50,9 @@ func openImage(path string) (image.Image, error) {
 	return img, Error(err)
 }
 
-func saveImage(img image.Image, path string) error {
-	fout, err := os.Create(path)
+func saveImage(img image.Image, Path string) error {
+	os.MkdirAll("./dist/", 0755)
+	fout, err := os.Create(path.Join("./dist/", Path))
 	if err != nil {
 		return Error(err)
 	}
@@ -269,10 +282,14 @@ func method4(g [][]int32, k int, s int) ([][]float64, [][]float64, [][]float64) 
 			for i := range p {
 				p[i] = p[i] * is
 
-				ss -= p[i] * math.Log2(p[i])
+				if p[i] > 0.000001 {
+					ss -= p[i] * math.Log2(p[i])
+				}
 				ee += p[i] * p[i]
 				ww += float64((i+1-int(m))*(i+1-int(m))) * p[i]
 			}
+
+			//fmt.Println(ss)
 
 			S[i-s][j-s] = ss
 			E[i-s][j-s] = ee
@@ -334,7 +351,9 @@ func method5(g1 [][]int32, g2 [][]int32, k int, s int) ([][]float64, [][]float64
 				for j := range p[i] {
 					p[i][j] = p[i][j] * is
 
-					ss -= p[i][j] * math.Log2(p[i][j])
+					if p[i][j] > 0.0000001 {
+						ss -= p[i][j] * math.Log2(p[i][j])
+					}
 					ee += p[i][j] * p[i][j]
 					m1 += float64(i) * p[i][j]
 					m2 += float64(j) * p[i][j]
@@ -379,35 +398,8 @@ func Rect(img image.Image, x1, y1, x2, y2 int) {
 	VLine(img, x2, y1, y2)
 }
 
-func process() error {
-	img, err := openImage("./Karta2.tif")
-	if err != nil {
-		return err
-	}
-
-	k, s := 6, 10
-
+func saveMethod1(img image.Image, i0, j0, k, s int) {
 	redImg, greenImg, blueImg := convert(img)
-
-	dist := method2(multiFragment(123, 50, k, s, redImg, greenImg, blueImg), [][][]int32{redImg, greenImg, blueImg})
-
-	fmt.Println(dist)
-
-	dg := method3(redImg, 4)
-
-	fmt.Println(dg)
-
-	S, E, W := method4(redImg, 4, 6)
-
-	fmt.Println(S)
-	fmt.Println(E)
-	fmt.Println(W)
-
-	S, E, W = method5(redImg, greenImg, 6, s)
-
-	fmt.Println(S)
-	fmt.Println(E)
-	fmt.Println(W)
 
 	rr := method1(redImg, 123, 50, k, s)
 	rg := method1(greenImg, 123, 50, k, s)
@@ -433,16 +425,195 @@ func process() error {
 			r := min(rr[i][j], rg[i][j], rb[i][j])
 
 			if r > rk || r < -rk {
-				fmt.Println(i, j, r)
+				//fmt.Println(i, j, r)
 
 				Rect(img, i-k, j-s, i+k, j+s)
 			}
 		}
 	}
 
-	if err := saveImage(img, "./Karta2.png"); err != nil {
+	saveImage(img, "method1.png")
+}
+
+func saveMethod2(img image.Image, i0, j0, k, s int) {
+	redImg, greenImg, blueImg := convert(img)
+
+	dist := method2(multiFragment(i0, j0, k, s, redImg, greenImg, blueImg), [][][]int32{redImg, greenImg, blueImg})
+	mMin, mMax := minMax(dist)
+	saveImage(makeImage(dist, mMin, mMax), "method2.png")
+
+}
+
+func saveMethod3(img image.Image, i0, j0, k, s int) {
+	redImg, greenImg, blueImg := convert(img)
+
+	dr := method3(redImg, 4)
+	dg := method3(greenImg, 4)
+	db := method3(blueImg, 4)
+
+	rMin, rMax := minMaxDisc(dr)
+	gMin, gMax := minMaxDisc(dg)
+	bMin, bMax := minMaxDisc(db)
+
+	img2 := makeColorImageDisc(dr, dg, db, rMin, rMax, gMin, gMax, bMin, bMax)
+
+	saveImage(img2, "method3.png")
+}
+
+func saveMethod4(img image.Image, i0, j0, k, s int) {
+	redImg, greenImg, blueImg := convert(img)
+
+	for i, colImg := range [][][]int32{redImg, greenImg, blueImg} {
+		S, E, W := method4(colImg, k, s)
+
+		mMin, mMax := minMax(S)
+		img4 := makeImage(S, mMin, mMax)
+		saveImage(img4, "method4-S-"+cColor(i)+".png")
+
+		mMin, mMax = minMax(E)
+		img4 = makeImage(E, mMin, mMax)
+		saveImage(img4, "method4-E-"+cColor(i)+".png")
+
+		mMin, mMax = minMax(W)
+		img4 = makeImage(W, mMin, mMax)
+		saveImage(img4, "method4-W-"+cColor(i)+".png")
+	}
+}
+
+func saveMethod5(img image.Image, i0, j0, k, s int) {
+	redImg, greenImg, blueImg := convert(img)
+
+	for i, colImg1 := range [][][]int32{redImg, greenImg, blueImg} {
+		for j, colImg2 := range [][][]int32{redImg, greenImg, blueImg} {
+			if j <= i {
+				continue
+			}
+
+			S, E, W := method5(colImg1, colImg2, 4, 6)
+
+			mMin, mMax := minMax(S)
+			img5 := makeImage(S, mMin, mMax)
+			saveImage(img5, "method5-S-"+cColor(i)+"-"+cColor(j)+".png")
+
+			mMin, mMax = minMax(E)
+			img5 = makeImage(E, mMin, mMax)
+			saveImage(img5, "method5-E-"+cColor(i)+"-"+cColor(j)+".png")
+
+			mMin, mMax = minMax(W)
+			img5 = makeImage(W, mMin, mMax)
+			saveImage(img5, "method5-5-"+cColor(i)+"-"+cColor(j)+".png")
+		}
+	}
+}
+
+func process() error {
+	img, err := openImage("./Karta2.tif")
+	if err != nil {
 		return err
 	}
 
+	i0, j0 := *i0, *j0
+	k, s := *k, *s
+
+	saveMethod1(img, i0, j0, k, s)
+	//saveMethod2(img, i0, j0, k, s)
+	//saveMethod3(img, i0, j0, k, s)
+	//saveMethod4(img, i0, j0, k, s)
+	//saveMethod5(img, i0, j0, k, s)
+
 	return nil
+}
+
+func makeImage(g [][]float64, min, max float64) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, len(g), len(g[0])))
+
+	for i := range g {
+		for j, c := range g[i] {
+			cc := uint8((c - min) / (max - min) * 255)
+			img.Set(i, j, color.RGBA{cc, cc, cc, 255})
+		}
+	}
+
+	return img
+}
+
+func makeColorImage(r, g, b [][]float64, rMin, rMax, gMin, gMax, bMin, bMax float64) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, len(g), len(g[0])))
+
+	for i := range r {
+		for j := range r[i] {
+			cr := uint8((r[i][j] - rMin) / (rMax - rMin) * 255)
+			cg := uint8((g[i][j] - gMin) / (gMax - gMin) * 255)
+			cb := uint8((b[i][j] - bMin) / (bMax - bMin) * 255)
+			img.Set(i, j, color.RGBA{cr, cg, cb, 255})
+		}
+	}
+
+	return img
+}
+
+func makeColorImageDisc(r, g, b [][]int32, rMin, rMax, gMin, gMax, bMin, bMax int32) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, len(g), len(g[0])))
+
+	for i := range r {
+		for j := range r[i] {
+			cr := uint8((r[i][j] - rMin) * 255 / (rMax - rMin))
+			cg := uint8((g[i][j] - gMin) * 255 / (gMax - gMin))
+			cb := uint8((b[i][j] - bMin) * 255 / (bMax - bMin))
+			img.Set(i, j, color.RGBA{cr, cg, cb, 255})
+		}
+	}
+
+	return img
+}
+
+func minMax(g [][]float64) (min, max float64) {
+	min = g[0][0]
+	max = min
+
+	for i := range g {
+		for _, v := range g[i] {
+			if v < min {
+				min = v
+			}
+
+			if v > max {
+				max = v
+			}
+		}
+	}
+
+	return
+}
+
+func minMaxDisc(g [][]int32) (min, max int32) {
+	min = g[0][0]
+	max = min
+
+	for i := range g {
+		for _, v := range g[i] {
+			if v < min {
+				min = v
+			}
+
+			if v > max {
+				max = v
+			}
+		}
+	}
+
+	return
+}
+
+func cColor(color int) string {
+	switch color {
+	case 0:
+		return "red"
+	case 1:
+		return "green"
+	case 2:
+		return "blue"
+	}
+
+	return "unknown"
 }
