@@ -16,13 +16,15 @@ import (
 	"github.com/gonum/matrix/mat64"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/tiff"
+	"time"
+	"fmt"
 )
 
 var (
-	i0 = flag.Int("i0", 120, "")
-	j0 = flag.Int("j0", 40, "")
-	k  = flag.Int("k", 5, "")
-	s  = flag.Int("s", 5, "")
+	i0 = flag.Int("i0", 140, "")
+	j0 = flag.Int("j0", 60, "")
+	k  = flag.Int("k", 3, "")
+	s  = flag.Int("s", 3, "")
 )
 
 func main() {
@@ -163,7 +165,7 @@ func method1(img [][]int32, i0, j0, k, s int) [][]float64 {
 		for j := s; j < len(img[i])-s; j++ {
 			v := fragment(img, i, j, k, s)
 
-			r[i-k][j-s] = F(u, v)
+			r[i-k][j-s] = 0.5*(F(u, v)+1)
 		}
 	}
 
@@ -401,12 +403,14 @@ func Rect(img image.Image, x1, y1, x2, y2 int) {
 func saveMethod1(img image.Image, i0, j0, k, s int) {
 	redImg, greenImg, blueImg := convert(img)
 
-	rr := method1(redImg, 123, 50, k, s)
-	rg := method1(greenImg, 123, 50, k, s)
-	rb := method1(blueImg, 123, 50, k, s)
+	//dt:=time.Now()
+	rr := method1(redImg, i0, j0, k, s)
+	//fmt.Println(time.Now().Sub(dt))
+	rg := method1(greenImg, i0, j0, k, s)
+	rb := method1(blueImg, j0, j0, k, s)
 
 	//wr, wg, wb := 20., 70., 40.
-	rk := 0.65
+	rk := 0.75*3
 
 	min := func(a, b, c float64) float64 {
 		if b < a {
@@ -421,13 +425,15 @@ func saveMethod1(img image.Image, i0, j0, k, s int) {
 	for i := range rr {
 		for j := range rr[i] {
 			//r := (rr[i][j]*wr + rg[i][j]*wg + rb[i][j]*wb) / (wr + wg + wb)
-			//r := rr[i][j] * rg[i][j] * rb[i][j]
 			r := min(rr[i][j], rg[i][j], rb[i][j])
+			r = rr[i][j] * rg[i][j] * rb[i][j]
+			r = rr[i][j]*rr[i][j] + rg[i][j]*rg[i][j] + rb[i][j]*rb[i][j]
+			//r = rr[i][j]
 
-			if r > rk || r < -rk {
+			if r >= rk {
 				//fmt.Println(i, j, r)
 
-				Rect(img, i-k, j-s, i+k, j+s)
+				Rect(img, i-1, j-1, i+2*k-1, j+2*s-1)
 			}
 		}
 	}
@@ -436,9 +442,12 @@ func saveMethod1(img image.Image, i0, j0, k, s int) {
 }
 
 func saveMethod2(img image.Image, i0, j0, k, s int) {
+	dt:=time.Now()
 	redImg, greenImg, blueImg := convert(img)
 
 	dist := method2(multiFragment(i0, j0, k, s, redImg, greenImg, blueImg), [][][]int32{redImg, greenImg, blueImg})
+	fmt.Println(time.Now().Sub(dt))
+
 	mMin, mMax := minMax(dist)
 	saveImage(makeImage(dist, mMin, mMax), "method2.png")
 
@@ -517,8 +526,8 @@ func process() error {
 
 	//saveMethod1(img, i0, j0, k, s)
 	//saveMethod2(img, i0, j0, k, s)
-	saveMethod3(img, i0, j0, k, s)
-	//saveMethod4(img, i0, j0, k, s)
+	//saveMethod3(img, i0, j0, k, s)
+	saveMethod4(img, i0, j0, k, s)
 	//saveMethod5(img, i0, j0, k, s)
 
 	return nil
